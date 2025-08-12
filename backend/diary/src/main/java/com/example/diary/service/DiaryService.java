@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+ // import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -33,13 +34,38 @@ public class DiaryService {
         Room r = requireMember(roomId, me);
         User author = users.findById(me).orElseThrow();
 
-        Diary d = new Diary();
-        d.setTitle(title);
-        d.setContent(content);
-        d.setDate(LocalDate.parse(date)); // YYYY-MM-DD
-        d.setAuthor(author);
-        d.setRoom(r);
-        return diaries.save(d);
+        LocalDate d = LocalDate.parse(date);
+
+        Diary diary = new Diary();
+        diary.setTitle(title);
+        diary.setContent(content);
+        diary.setDate(d); // YYYY-MM-DD
+        diary.setAuthor(author);
+        diary.setRoom(r);
+
+        LocalDate today = LocalDate.now();
+        LocalDate prev = r.getLastEntryDate();
+
+        // lastEntryDate는 가장 최근 날짜로 갱신
+        if (prev == null || d.isAfter(prev)) {
+            r.setLastEntryDate(d);
+        }
+        
+        // streak 갱신(오늘 쓴 경우에만 재계산)
+        if (d.isEqual(today)) {
+            if (prev != null && prev.isEqual(today.minusDays(1))) {
+                r.setStreak(Math.max(1, r.getStreak()) + 1);
+            } 
+            else if (prev != null && prev.isEqual(today)) {
+                // 오늘 이미 쓴 게 있으면 그대로
+            }
+            else {
+                r.setStreak(1);
+            }
+        }
+
+
+        return diary;
     }
 
     public void deleteInRoom(Long roomId, Long me, Long diaryId) {

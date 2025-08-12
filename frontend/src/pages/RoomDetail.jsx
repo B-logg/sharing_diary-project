@@ -3,14 +3,31 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api';
 
+// 상태별 이모지 (원하면 이미지/SVG로 교체 가능)
+function faceByStatus(status) {
+  switch (status) {
+    case 'THRIVING': return '🌿😊';
+    case 'OK':       return '🌱🙂';
+    case 'WILTING':  return '🥀😟';
+    case 'DEAD':     return '🪦😢';
+    default:         return '🌱';
+  }
+}
+
 export default function RoomDetail() {
   const { roomId } = useParams();
 
+  // 다이어리
   const [diaries, setDiaries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ title: '', content: '', date: '' }); // YYYY-MM-DD
+
+  // 식물 상태
+  const [plant, setPlant] = useState({
+    health: 100, status: 'THRIVING', daysMissed: 0, streak: 0, lastEntryDate: null,
+  });
 
   const sortedDiaries = useMemo(
     () => [...diaries].sort((a, b) => (b?.date ?? '').localeCompare(a?.date ?? '')),
@@ -29,9 +46,7 @@ export default function RoomDetail() {
       const d = new Date(yyyyMMdd);
       if (isNaN(d.getTime())) return yyyyMMdd;
       return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-    } catch {
-      return yyyyMMdd;
-    }
+    } catch { return yyyyMMdd; }
   };
 
   const fetchDiaries = async () => {
@@ -47,12 +62,23 @@ export default function RoomDetail() {
     }
   };
 
-  // 방이 바뀔 때 폼/편집 상태 초기화 후 목록 재요청
+  const fetchPlant = async () => {
+    try {
+      const res = await api.get(`/rooms/${roomId}/plant`);
+      setPlant(res.data);
+    } catch (e) {
+      // 식물 상태 실패해도 치명적 아님
+      console.warn('plant load failed', e);
+    }
+  };
+
+  // 방 변경 시 초기화 + 데이터 로드
   useEffect(() => {
     setEditingId(null);
     setForm({ title: '', content: '', date: '' });
     setErrMsg('');
     fetchDiaries();
+    fetchPlant();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -62,14 +88,8 @@ export default function RoomDetail() {
   };
 
   const validateForm = () => {
-    if (!form.title.trim()) {
-      setErrMsg('제목은 필수입니다.');
-      return false;
-    }
-    if (!form.date) {
-      setErrMsg('날짜는 필수입니다.');
-      return false;
-    }
+    if (!form.title.trim()) { setErrMsg('제목은 필수입니다.'); return false; }
+    if (!form.date) { setErrMsg('날짜는 필수입니다.'); return false; }
     return true;
   };
 
@@ -88,6 +108,7 @@ export default function RoomDetail() {
       setForm({ title: '', content: '', date: '' });
       setEditingId(null);
       await fetchDiaries();
+      await fetchPlant(); // 작성/수정 후 식물 상태 갱신
     } catch (e2) {
       showError(e2, editingId ? '수정에 실패했어요.' : '작성에 실패했어요.');
     } finally {
@@ -106,6 +127,7 @@ export default function RoomDetail() {
         setEditingId(null);
         setForm({ title: '', content: '', date: '' });
       }
+      await fetchPlant(); // 삭제는 상태 변화에 직접 영향은 없지만 안전하게 갱신
     } catch (e) {
       showError(e, '삭제에 실패했어요.');
     } finally {
@@ -130,6 +152,22 @@ export default function RoomDetail() {
       <div style={styles.header}>
         <h2>🗂️ 방 #{roomId}</h2>
         <Link to="/rooms">← 방 목록</Link>
+      </div>
+
+      {/* 식물 상태 위젯 */}
+      <div style={styles.plantWrap}>
+        <span style={{ fontSize: 28 }}>{faceByStatus(plant.status)}</span>
+        <div style={{ display: 'grid', gap: 4 }}>
+          <strong>식물 상태: {plant.status}</strong>
+          <small>
+            건강도 {plant.health}% · {plant.daysMissed > 0 ? `최근 ${plant.daysMissed}일 공백` : '오늘도 싱싱해요!'}
+            {plant.streak > 0 && ` · 연속 ${plant.streak}일 작성 중`}
+          </small>
+          <div style={styles.barOuter}>
+            <div style={{ ...styles.barInner, width: `${plant.health}%`,
+              background: plant.health > 70 ? '#16a34a' : plant.health > 40 ? '#f59e0b' : plant.health > 10 ? '#ef4444' : '#111' }} />
+          </div>
+        </div>
       </div>
 
       {errMsg && (
@@ -224,17 +262,29 @@ export default function RoomDetail() {
 const styles = {
   container: { padding: '24px', maxWidth: 760, margin: '0 auto', fontFamily: '-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,Apple SD Gothic Neo,Noto Sans KR,sans-serif' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+
+  // 식물 위젯
+  plantWrap: {
+    display: 'flex', alignItems: 'center', gap: 12, margin: '12px 0',
+    padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 12, background: '#f8fafc'
+  },
+  barOuter: { width: 220, height: 8, background: '#eee', borderRadius: 999, overflow: 'hidden' },
+  barInner: { height: '100%', borderRadius: 999 },
+
   form: { display: 'grid', gap: 12, padding: 16, border: '1px solid #e5e7eb', borderRadius: 12, background: '#fafafa' },
   row: { display: 'grid', gap: 6 },
   label: { fontSize: 12, color: '#667085' },
   input: { padding: '10px 12px', borderRadius: 10, border: '1px solid #d0d5dd', outline: 'none' },
+
   list: { listStyle: 'none', padding: 0, display: 'grid', gap: 12 },
   card: { border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: 'white' },
   cardHeader: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' },
+
   primaryBtn: { padding: '10px 12px', borderRadius: 10, border: '1px solid #155eef', background: '#155eef', color: '#fff', cursor: 'pointer' },
   secondaryBtn: { padding: '8px 10px', borderRadius: 10, border: '1px solid #d0d5dd', background: '#fff', cursor: 'pointer' },
   ghostBtn: { padding: '10px 12px', borderRadius: 10, border: '1px solid #d0d5dd', background: 'transparent', cursor: 'pointer' },
   dangerBtn: { padding: '8px 10px', borderRadius: 10, border: '1px solid #ef4444', background: '#fee2e2', color: '#b91c1c', cursor: 'pointer' },
+
   error: { background: '#FEF3F2', color: '#B42318', border: '1px solid #FEE2E2', borderRadius: 12, padding: '10px 12px', marginBottom: 12, display: 'inline-flex', alignItems: 'center' },
   closeBtn: { marginLeft: 8, border: 'none', background: 'transparent', cursor: 'pointer' },
 };

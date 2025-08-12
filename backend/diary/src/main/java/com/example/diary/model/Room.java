@@ -2,6 +2,7 @@ package com.example.diary.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Entity
 public class Room {
@@ -19,6 +20,12 @@ public class Room {
   @Column(nullable = false)
   private LocalDateTime createdAt = LocalDateTime.now();
 
+  @Column(nullable = false)
+  private LocalDate lastEntryDate; // 마지막 일기 날짜(YYYY-MM-DD)
+
+  @Column(nullable = false)
+  private int streak; // 연속 기록 일수
+
   public Room() {}
 
   // getters & setters
@@ -33,4 +40,9 @@ public class Room {
 
   public LocalDateTime getCreatedAt() { return createdAt; }
   public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+  public LocalDate getLastEntryDate() { return lastEntryDate ;}
+  public void setLastEntryDate(LocalDate d) { this.lastEntryDate = d; }
+  public int getStreak() { return streak; }
+  public void setStreak(int streak) { this.streak = streak; }
 }
